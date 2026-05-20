@@ -117,8 +117,8 @@ interface ChannelProfile {
 const CHANNEL_PROFILES: Record<Channel, ChannelProfile> = {
   google: {
     share_of_paid_spend: 0.32,
-    daily_spend_mean: 2400,
-    daily_spend_std: 600,
+    daily_spend_mean: 1200,
+    daily_spend_std: 300,
     cpc_mean: 2.4,
     cpc_std: 0.4,
     conversion_rate_mean: 0.055,
@@ -129,8 +129,8 @@ const CHANNEL_PROFILES: Record<Channel, ChannelProfile> = {
   },
   meta: {
     share_of_paid_spend: 0.38,
-    daily_spend_mean: 2800,
-    daily_spend_std: 750,
+    daily_spend_mean: 1400,
+    daily_spend_std: 380,
     cpc_mean: 1.4,
     cpc_std: 0.3,
     conversion_rate_mean: 0.022,
@@ -141,8 +141,8 @@ const CHANNEL_PROFILES: Record<Channel, ChannelProfile> = {
   },
   tiktok: {
     share_of_paid_spend: 0.14,
-    daily_spend_mean: 1050,
-    daily_spend_std: 280,
+    daily_spend_mean: 200,
+    daily_spend_std: 60,
     cpc_mean: 0.85,
     cpc_std: 0.18,
     conversion_rate_mean: 0.008,
@@ -153,8 +153,8 @@ const CHANNEL_PROFILES: Record<Channel, ChannelProfile> = {
   },
   linkedin: {
     share_of_paid_spend: 0.09,
-    daily_spend_mean: 700,
-    daily_spend_std: 200,
+    daily_spend_mean: 350,
+    daily_spend_std: 100,
     cpc_mean: 6.2,
     cpc_std: 1.2,
     conversion_rate_mean: 0.038,
@@ -165,8 +165,8 @@ const CHANNEL_PROFILES: Record<Channel, ChannelProfile> = {
   },
   snapchat: {
     share_of_paid_spend: 0.07,
-    daily_spend_mean: 530,
-    daily_spend_std: 160,
+    daily_spend_mean: 95,
+    daily_spend_std: 30,
     cpc_mean: 1.1,
     cpc_std: 0.22,
     conversion_rate_mean: 0.012,
@@ -238,8 +238,10 @@ const INTENT_TAGS: IntentTag[] = [
 // ─────────────────────────────────────────────────────────────────────────
 // DATE RANGE
 // ─────────────────────────────────────────────────────────────────────────
+// DATE RANGE — 2 years of activity
+// ─────────────────────────────────────────────────────────────────────────
 const TODAY = new Date('2026-05-20T00:00:00Z');
-const DAYS = 180;
+const DAYS = 720; // ~2 years
 const START_DATE = new Date(TODAY.getTime() - DAYS * 24 * 60 * 60 * 1000);
 
 const dateRange: Date[] = [];
@@ -248,12 +250,21 @@ for (let i = 0; i < DAYS; i++) {
   dateRange.push(d);
 }
 
+/**
+ * Activity multiplier over the 2-year window — the brand grows from a small
+ * startup operation (15% of end-state activity) to its current scale (130%),
+ * with weekly seasonality and a mild monthly cycle layered on top.
+ *
+ * The shape is a slow ramp for the first 6 months, an acceleration around
+ * month 8-14 as paid scaled, then steady growth thereafter.
+ */
 function seasonalMultiplier(date: Date): number {
-  // Mild weekly seasonality + growth trend
   const dayOfWeek = date.getUTCDay();
   const weekend = dayOfWeek === 0 || dayOfWeek === 6 ? 0.85 : 1.0;
   const dayIndex = Math.floor((date.getTime() - START_DATE.getTime()) / (24 * 60 * 60 * 1000));
-  const growth = 1 + 0.0015 * dayIndex; // 1.27x by end
+  const t = dayIndex / DAYS; // 0 → 1
+  // S-curve growth: starts at ~0.15, accelerates around midpoint, ends at ~1.3
+  const growth = 0.15 + 1.15 / (1 + Math.exp(-7 * (t - 0.45)));
   const monthly = 1 + 0.08 * Math.sin((2 * Math.PI * dayIndex) / 30);
   return weekend * growth * monthly;
 }
@@ -375,27 +386,79 @@ function generateCreatives(): Creative[] {
 
 // ─────────────────────────────────────────────────────────────────────────
 // AD SPEND
+//
+// Google channel includes two BRANDED campaigns with their own unit economics:
+//   - very low CPC (people searching the brand name = cheap auction)
+//   - very high CTR (matched-intent traffic)
+//   - very high CVR (people already evaluating us)
+// Branded spend stays a small share of Google budget, but ROAS is exceptional.
+// In a real account these would be Search · Exact / Phrase match campaigns
+// on the brand name and its variants.
 // ─────────────────────────────────────────────────────────────────────────
+
+interface BrandedProfile {
+  daily_spend_share_of_google: number; // small slice of Google daily budget
+  cpc_mean: number;
+  cpc_std: number;
+  ctr_mean: number;
+  conversion_rate_mean: number;
+}
+
+const BRANDED_PROFILE: BrandedProfile = {
+  daily_spend_share_of_google: 0.04, // ~4% of Google budget on branded
+  cpc_mean: 0.55,
+  cpc_std: 0.12,
+  ctr_mean: 0.11,
+  conversion_rate_mean: 0.09,
+};
+
 function generateAdSpend(creatives: Creative[]): AdSpendRow[] {
   const rows: AdSpendRow[] = [];
-  // campaign / adgroup names per channel
-  const campaignsByChannel: Record<Channel, { id: string; name: string; adGroups: { id: string; name: string }[] }[]> =
-    {} as never;
+  const campaignsByChannel: Record<
+    Channel,
+    { id: string; name: string; branded: boolean; adGroups: { id: string; name: string }[] }[]
+  > = {} as never;
 
   for (const channel of PAID_CHANNELS) {
     const profile = CHANNEL_PROFILES[channel];
-    const campaigns: { id: string; name: string; adGroups: { id: string; name: string }[] }[] = [];
+    const campaigns: {
+      id: string;
+      name: string;
+      branded: boolean;
+      adGroups: { id: string; name: string }[];
+    }[] = [];
+
+    // Google specifically gets 2 branded campaigns up front
+    if (channel === 'google') {
+      for (const variant of ['Exact', 'Phrase']) {
+        const cId = `cmp_google_branded_${variant.toLowerCase()}`;
+        const adGroups: { id: string; name: string }[] = [];
+        for (let g = 0; g < 2; g++) {
+          adGroups.push({
+            id: `${cId}_ag_${g + 1}`,
+            name: `Branded Search · ${variant} / AG ${g + 1}`,
+          });
+        }
+        campaigns.push({
+          id: cId,
+          name: `Google Branded Search · ${variant}`,
+          branded: true,
+          adGroups,
+        });
+      }
+    }
+
     for (let c = 0; c < profile.num_campaigns; c++) {
       const cId = `cmp_${channel}_${(c + 1).toString().padStart(3, '0')}`;
       const themes = [
         'Prospecting',
         'Retargeting',
-        'Brand',
         'Conquesting',
         'Lookalike',
         'Interest',
         'Seasonal',
         'High-Intent',
+        'Awareness',
       ];
       const cName = `${channel.toUpperCase()} ${themes[c % themes.length]} ${c + 1}`;
       const adGroups: { id: string; name: string }[] = [];
@@ -406,7 +469,7 @@ function generateAdSpend(creatives: Creative[]): AdSpendRow[] {
           name: `${cName} / AG ${g + 1}`,
         });
       }
-      campaigns.push({ id: cId, name: cName, adGroups });
+      campaigns.push({ id: cId, name: cName, branded: false, adGroups });
     }
     campaignsByChannel[channel] = campaigns;
   }
@@ -423,23 +486,61 @@ function generateAdSpend(creatives: Creative[]): AdSpendRow[] {
         gaussian(profile.daily_spend_mean, profile.daily_spend_std) * season,
       );
 
-      // Distribute across campaigns with skew (Pareto-like)
-      const campaignWeights = campaigns.map((_, idx) => 1 / (idx + 1) ** 0.7);
-      const wSum = campaignWeights.reduce((a, b) => a + b, 0);
-      const campaignSpends = campaignWeights.map((w) => (w / wSum) * dailyChannelSpend);
+      const brandedSpend =
+        channel === 'google' ? dailyChannelSpend * BRANDED_PROFILE.daily_spend_share_of_google : 0;
+      const nonBrandedSpend = dailyChannelSpend - brandedSpend;
 
-      campaigns.forEach((cmp, cmpIdx) => {
-        const cmpSpend = campaignSpends[cmpIdx];
+      const nonBranded = campaigns.filter((c) => !c.branded);
+      const branded = campaigns.filter((c) => c.branded);
+
+      // Distribute non-branded with Pareto-like skew
+      const nbWeights = nonBranded.map((_, idx) => 1 / (idx + 1) ** 0.7);
+      const nbSum = nbWeights.reduce((a, b) => a + b, 0);
+      const nbSpends = nbWeights.map((w) => (w / nbSum) * nonBrandedSpend);
+
+      nonBranded.forEach((cmp, cmpIdx) => {
+        const cmpSpend = nbSpends[cmpIdx];
         cmp.adGroups.forEach((ag, agIdx) => {
           const agSpend = cmpSpend / cmp.adGroups.length;
           const creative = channelCreatives[(cmpIdx * 3 + agIdx) % channelCreatives.length];
           const cpc = clamp(gaussian(profile.cpc_mean, profile.cpc_std), 0.2, 50);
           const clicks = Math.max(1, Math.round(agSpend / cpc));
-          // CTR roughly 0.8–3% depending on channel
           const ctr = clamp(gaussian(channel === 'tiktok' ? 0.018 : 0.012, 0.004), 0.003, 0.05);
           const impressions = Math.round(clicks / ctr);
-          // platform-attributed conversions: noisier than real conversions
           const platConv = clicks * clamp(gaussian(profile.conversion_rate_mean * 1.4, 0.01), 0, 0.2);
+          rows.push({
+            date: dateStr,
+            channel,
+            campaign_id: cmp.id,
+            campaign_name: cmp.name,
+            ad_group_id: ag.id,
+            ad_group_name: ag.name,
+            creative_id: creative.id,
+            creative_name: creative.name,
+            impressions,
+            clicks,
+            spend_usd: Math.round(agSpend * 100) / 100,
+            platform_conversions: Math.round(platConv),
+          });
+        });
+      });
+
+      // Distribute branded evenly across its campaigns
+      branded.forEach((cmp) => {
+        const cmpSpend = brandedSpend / branded.length;
+        cmp.adGroups.forEach((ag) => {
+          const agSpend = cmpSpend / cmp.adGroups.length;
+          const creative = channelCreatives[0];
+          const cpc = clamp(
+            gaussian(BRANDED_PROFILE.cpc_mean, BRANDED_PROFILE.cpc_std),
+            0.15,
+            2.0,
+          );
+          const clicks = Math.max(1, Math.round(agSpend / cpc));
+          const ctr = clamp(gaussian(BRANDED_PROFILE.ctr_mean, 0.02), 0.05, 0.25);
+          const impressions = Math.round(clicks / ctr);
+          const platConv =
+            clicks * clamp(gaussian(BRANDED_PROFILE.conversion_rate_mean, 0.018), 0.03, 0.18);
           rows.push({
             date: dateStr,
             channel,
@@ -594,32 +695,34 @@ function generateSessionsAndCustomers(adSpend: AdSpendRow[], offerings: Offering
   const TARGET_QA = 2000;
   const TARGET_CONV = 500;
 
-  // Probability per channel that a session will lead to (a) qualified action, (b) conversion
-  // calibrated so that target totals are roughly hit
+  // Probability per channel that a session will lead to (a) qualified action, (b) conversion.
+  // Tuned so per-channel conversion counts × calibrated ROAS gives realistic AOVs
+  // ($1,500–$3,500 range typical for a premium consumer brand).
   const qaRate: Record<Channel, number> = {
-    google: 0.065,
-    meta: 0.03,
-    tiktok: 0.011,
-    linkedin: 0.07,
-    snapchat: 0.015,
-    referral: 0.075,
-    organic: 0.06,
-    direct: 0.06,
-    email: 0.08,
+    google: 0.18,
+    meta: 0.085,
+    tiktok: 0.03,
+    linkedin: 0.08, // small audience, very high-quality — fewer QAs in absolute terms
+    snapchat: 0.04,
+    referral: 0.15,
+    organic: 0.13,
+    direct: 0.13,
+    email: 0.16,
   };
 
   const convGivenQa: Record<Channel, number> = {
-    google: 0.36,
-    meta: 0.21,
-    tiktok: 0.12,
-    linkedin: 0.42,
-    snapchat: 0.17,
-    referral: 0.36,
-    organic: 0.32,
-    direct: 0.34,
-    email: 0.4,
+    google: 0.5,
+    meta: 0.3,
+    tiktok: 0.18,
+    linkedin: 0.32,
+    snapchat: 0.25,
+    referral: 0.42,
+    organic: 0.38,
+    direct: 0.4,
+    email: 0.45,
   };
 
+  // Pre-calibration AOVs (will be rescaled by calibrateRoas() to hit per-channel ROAS targets)
   const aovByChannel: Record<Channel, number> = {
     google: 1850,
     meta: 1500,
@@ -1259,6 +1362,310 @@ function intentThemeFrequency(customers: Customer[]) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// ROAS CALIBRATION
+//
+// Channel storylines are encoded in the generator distributions, but the
+// exact ROAS that falls out depends on draw-by-draw noise. After generation
+// we re-scale conversion values per channel so the dashboard hits the
+// target ROAS narrative the operator wants to demonstrate:
+//
+//   Google     1.80x  (strong — operator's specialty)
+//     Branded  ~10x   (cheap clicks, intent-matched)
+//   Meta       1.20x  (above 1, operator's specialty)
+//   TikTok     0.83x  (cheap top-of-funnel, doesn't close)
+//   LinkedIn   0.75x  (high AOV but high CPC kills ROAS)
+//   Snapchat   0.90x
+//
+//   Blended over all conversions (paid + organic + referral): ~2.3x
+//
+// Conversions outside the paid channels (organic / direct / referral / email)
+// inflate the blended ROAS because they have no offsetting paid spend.
+// ─────────────────────────────────────────────────────────────────────────
+
+const TARGET_PAID_ROAS: Record<Channel, number> = {
+  google: 1.8,
+  meta: 1.2,
+  tiktok: 0.83,
+  linkedin: 0.75,
+  snapchat: 0.9,
+  referral: 0,
+  organic: 0,
+  direct: 0,
+  email: 0,
+};
+
+// Blended ROAS target — paid + organic/direct/referral revenue divided by
+// paid spend. Organic & friends produce "free" revenue that lifts blended
+// well above any individual paid channel's ROAS.
+const TARGET_BLENDED_ROAS = 2.3;
+
+// Relative weights for distributing unpaid revenue across unpaid channels.
+const UNPAID_VALUE_WEIGHTS: Record<Channel, number> = {
+  google: 0,
+  meta: 0,
+  tiktok: 0,
+  linkedin: 0,
+  snapchat: 0,
+  organic: 0.42, // SEO-led; biggest share of "free" revenue as brand grew
+  direct: 0.28, // brand-name traffic returning directly
+  referral: 0.22, // partner-sourced
+  email: 0.08, // CRM-nurtured re-engagement
+};
+
+// Branded vs non-branded Google split. Branded carries ~12% of Google
+// conversion VALUE but only ~4% of Google spend → very high ROAS.
+const BRANDED_SHARE_OF_GOOGLE_VALUE = 0.12;
+const BRANDED_TARGET_ROAS = 10.5;
+
+function isBrandedCampaign(campaign_id?: string): boolean {
+  return !!campaign_id && campaign_id.startsWith('cmp_google_branded_');
+}
+
+function calibrateRoas(adSpend: AdSpendRow[], conversions: Conversion[], customers: Customer[]) {
+  // Per-channel paid spend
+  const spendByChannel = new Map<Channel, number>();
+  for (const r of adSpend) {
+    spendByChannel.set(r.channel, (spendByChannel.get(r.channel) ?? 0) + r.spend_usd);
+  }
+
+  // Mark each conversion as branded or non-branded based on the customer's
+  // first paid touchpoint (a proxy — in production this would come from MTA).
+  // For simplicity we mark conversions whose customer first-touched Google
+  // and (probabilistically) attribute a share of them to branded.
+  const googleConvs = conversions.filter((c) => c.attribution_channel === 'google');
+  const brandedConvCount = Math.max(1, Math.round(googleConvs.length * 0.18));
+  // Mark a deterministic slice as branded
+  const brandedConvIds = new Set<string>();
+  googleConvs.slice(0, brandedConvCount).forEach((c) => brandedConvIds.add(c.id));
+
+  // Calculate per-channel current value
+  const valueByChannel = new Map<Channel, number>();
+  for (const c of conversions) {
+    valueByChannel.set(
+      c.attribution_channel,
+      (valueByChannel.get(c.attribution_channel) ?? 0) + c.value_usd,
+    );
+  }
+
+  // For Google, split spend into branded vs non-branded
+  const googleSpendTotal = spendByChannel.get('google') ?? 0;
+  const googleBrandedSpend = googleSpendTotal * 0.04; // matches BRANDED_PROFILE share
+  const googleNonBrandedSpend = googleSpendTotal - googleBrandedSpend;
+
+  // Target values
+  const targetValueByChannel = new Map<Channel, number>();
+  for (const ch of PAID_CHANNELS) {
+    if (ch === 'google') {
+      // Compose: branded carries BRANDED_TARGET_ROAS on branded spend,
+      // non-branded carries (1.8 × total - branded contribution) / non-branded spend.
+      const brandedValue = googleBrandedSpend * BRANDED_TARGET_ROAS;
+      const totalValue = googleSpendTotal * TARGET_PAID_ROAS.google;
+      const nonBrandedValue = totalValue - brandedValue;
+      targetValueByChannel.set('google', totalValue);
+      // Track desired branded/non-branded split for the rescale below
+      (targetValueByChannel as unknown as Map<string, number>).set('__google_branded__', brandedValue);
+      (targetValueByChannel as unknown as Map<string, number>).set('__google_nonbranded__', nonBrandedValue);
+    } else {
+      targetValueByChannel.set(ch, (spendByChannel.get(ch) ?? 0) * TARGET_PAID_ROAS[ch]);
+    }
+  }
+
+  // Rescale per channel (and within Google, separately branded vs non-branded)
+  for (const ch of PAID_CHANNELS) {
+    if (ch === 'google') {
+      const currentBranded = googleConvs
+        .filter((c) => brandedConvIds.has(c.id))
+        .reduce((a, c) => a + c.value_usd, 0);
+      const currentNonBranded = googleConvs
+        .filter((c) => !brandedConvIds.has(c.id))
+        .reduce((a, c) => a + c.value_usd, 0);
+      const targetBranded = (targetValueByChannel as unknown as Map<string, number>).get(
+        '__google_branded__',
+      )!;
+      const targetNonBranded = (targetValueByChannel as unknown as Map<string, number>).get(
+        '__google_nonbranded__',
+      )!;
+      const scaleBranded = currentBranded > 0 ? targetBranded / currentBranded : 1;
+      const scaleNonBranded = currentNonBranded > 0 ? targetNonBranded / currentNonBranded : 1;
+      for (const c of googleConvs) {
+        const scale = brandedConvIds.has(c.id) ? scaleBranded : scaleNonBranded;
+        c.value_usd = Math.round(c.value_usd * scale * 100) / 100;
+      }
+    } else {
+      const current = valueByChannel.get(ch) ?? 0;
+      const target = targetValueByChannel.get(ch) ?? 0;
+      if (current === 0) continue;
+      const scale = target / current;
+      for (const c of conversions) {
+        if (c.attribution_channel === ch) {
+          c.value_usd = Math.round(c.value_usd * scale * 100) / 100;
+        }
+      }
+    }
+  }
+
+  // Now calibrate UNPAID channels to hit the blended ROAS target.
+  // Blended ROAS = (paid_revenue + unpaid_revenue) / paid_spend
+  // → unpaid_revenue_target = blended_target × paid_spend − paid_revenue
+  const totalPaidSpend = Array.from(spendByChannel.values()).reduce((a, b) => a + b, 0);
+  const paidRevenue = conversions
+    .filter((c) => PAID_CHANNELS.includes(c.attribution_channel))
+    .reduce((a, c) => a + c.value_usd, 0);
+  const targetUnpaidRevenue = Math.max(0, TARGET_BLENDED_ROAS * totalPaidSpend - paidRevenue);
+
+  // Current unpaid revenue per channel — only channels that actually have
+  // conversions get a share; renormalize the weight stencil over them so
+  // total unpaid revenue hits the blended target.
+  const unpaidChannels: Channel[] = ['organic', 'direct', 'referral', 'email'];
+  const currentUnpaid = new Map<Channel, number>();
+  for (const ch of unpaidChannels) {
+    currentUnpaid.set(
+      ch,
+      conversions
+        .filter((c) => c.attribution_channel === ch)
+        .reduce((a, c) => a + c.value_usd, 0),
+    );
+  }
+  const activeUnpaid = unpaidChannels.filter((ch) => (currentUnpaid.get(ch) ?? 0) > 0);
+  const weightSum = activeUnpaid.reduce((a, ch) => a + UNPAID_VALUE_WEIGHTS[ch], 0);
+  for (const ch of activeUnpaid) {
+    const cur = currentUnpaid.get(ch)!;
+    const target = targetUnpaidRevenue * (UNPAID_VALUE_WEIGHTS[ch] / weightSum);
+    const scale = target / cur;
+    for (const c of conversions) {
+      if (c.attribution_channel === ch) {
+        c.value_usd = Math.round(c.value_usd * scale * 100) / 100;
+      }
+    }
+  }
+
+  // Sync customer.conversion_value_usd with the rescaled conversions
+  const convByCustomer = new Map<string, number>();
+  for (const c of conversions) {
+    convByCustomer.set(c.customer_id, (convByCustomer.get(c.customer_id) ?? 0) + c.value_usd);
+  }
+  for (const cust of customers) {
+    if (cust.converted && convByCustomer.has(cust.id)) {
+      cust.conversion_value_usd = convByCustomer.get(cust.id)!;
+    }
+  }
+
+  return { brandedConvIds, googleBrandedSpend, googleNonBrandedSpend };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// BRAND GROWTH NARRATIVE
+//
+// 2-year monthly snapshots of the brand build-up: paid spend, customers,
+// Instagram followers, TikTok followers, Google quality score, branded search
+// volume, organic share of traffic. These are derived from the activity data
+// for the spend/customers numbers, and modeled forward from realistic
+// starting points for the social/SEO numbers.
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface BrandGrowthMonthly {
+  month: string;
+  month_index: number;
+  paid_spend_usd: number;
+  customers_acquired: number;
+  conversions: number;
+  blended_roas: number;
+  instagram_followers: number;
+  tiktok_followers: number;
+  google_quality_score: number;
+  branded_search_volume: number;
+  organic_share_of_sessions: number;
+  milestone?: string;
+}
+
+const BRAND_MILESTONES: Record<number, string> = {
+  1: 'Brand launch · paid testing begins',
+  4: 'First Meta Lookalike scale-up',
+  7: 'Google Search expanded to non-brand',
+  10: 'TikTok creator collabs · top-of-funnel push',
+  13: 'Branded search volume crosses 1k/mo',
+  16: 'LinkedIn pilot for B2B-flavored buyers',
+  19: 'Quality Score breaks 8 · CPCs drop',
+  22: 'Referral partner program reaches scale',
+};
+
+function buildBrandGrowth(
+  adSpend: AdSpendRow[],
+  sessions: Session[],
+  customers: Customer[],
+  conversions: Conversion[],
+): BrandGrowthMonthly[] {
+  // Bucket by year-month
+  const monthKey = (d: string) => d.slice(0, 7);
+  const monthSpend = new Map<string, number>();
+  const monthCustomers = new Map<string, number>();
+  const monthConvs = new Map<string, number>();
+  const monthConvValue = new Map<string, number>();
+  const monthSessions = new Map<string, { total: number; organic: number }>();
+
+  for (const r of adSpend) {
+    const m = monthKey(r.date);
+    monthSpend.set(m, (monthSpend.get(m) ?? 0) + r.spend_usd);
+  }
+  for (const cust of customers) {
+    if (!cust.created_at) continue;
+    const m = monthKey(cust.created_at);
+    monthCustomers.set(m, (monthCustomers.get(m) ?? 0) + 1);
+  }
+  for (const c of conversions) {
+    const m = monthKey(c.occurred_at);
+    monthConvs.set(m, (monthConvs.get(m) ?? 0) + 1);
+    monthConvValue.set(m, (monthConvValue.get(m) ?? 0) + c.value_usd);
+  }
+  for (const s of sessions) {
+    const m = monthKey(s.started_at);
+    const cur = monthSessions.get(m) ?? { total: 0, organic: 0 };
+    cur.total++;
+    if (s.channel === 'organic' || s.channel === 'direct') cur.organic++;
+    monthSessions.set(m, cur);
+  }
+
+  // Build month list
+  const months: string[] = [];
+  const cursor = new Date(START_DATE);
+  while (cursor <= TODAY) {
+    months.push(cursor.toISOString().slice(0, 7));
+    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+  }
+  const uniqueMonths = Array.from(new Set(months));
+
+  // Social / SEO progression (modeled as a sigmoid + monthly noise)
+  // Starting positions vs end positions for storytelling
+  const insta = (mi: number) => Math.round(8000 + 165000 / (1 + Math.exp(-0.28 * (mi - 12))));
+  const tt = (mi: number) => Math.round(4000 + 240000 / (1 + Math.exp(-0.34 * (mi - 13))));
+  const qs = (mi: number) => Math.min(9.6, 4.8 + 4.5 / (1 + Math.exp(-0.32 * (mi - 11))));
+  const brandedSearch = (mi: number) =>
+    Math.round(180 + 5800 / (1 + Math.exp(-0.36 * (mi - 13))));
+
+  return uniqueMonths.map((m, idx) => {
+    const spend = Math.round(monthSpend.get(m) ?? 0);
+    const convValue = Math.round(monthConvValue.get(m) ?? 0);
+    const totalSessions = monthSessions.get(m)?.total ?? 0;
+    const organicSessions = monthSessions.get(m)?.organic ?? 0;
+    return {
+      month: m,
+      month_index: idx,
+      paid_spend_usd: spend,
+      customers_acquired: monthCustomers.get(m) ?? 0,
+      conversions: monthConvs.get(m) ?? 0,
+      blended_roas: spend > 0 ? Math.round((convValue / spend) * 100) / 100 : 0,
+      instagram_followers: insta(idx),
+      tiktok_followers: tt(idx),
+      google_quality_score: Math.round(qs(idx) * 10) / 10,
+      branded_search_volume: brandedSearch(idx),
+      organic_share_of_sessions:
+        totalSessions > 0 ? Math.round((organicSessions / totalSessions) * 1000) / 1000 : 0,
+      milestone: BRAND_MILESTONES[idx],
+    };
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // MAIN
 // ─────────────────────────────────────────────────────────────────────────
 function main() {
@@ -1275,6 +1682,12 @@ function main() {
 
   log('Generating sessions, events, customers (this is the heavy step)...');
   const state = generateSessionsAndCustomers(adSpend, offerings);
+
+  log('Calibrating channel ROAS to operator targets...');
+  const calibration = calibrateRoas(adSpend, state.conversions, state.customers);
+
+  log('Building brand-growth snapshots...');
+  const brandGrowth = buildBrandGrowth(adSpend, state.sessions, state.customers, state.conversions);
 
   log('Building journeys...');
   const journeys = buildJourneys(state);
@@ -1347,6 +1760,42 @@ function main() {
   // Split into purpose-built files so pages only load what they need.
   // The full bundle is 60+MB once events are included — never ship that to the client.
 
+  // Branded-search breakdown: compute spend / conversions / value for the
+  // branded campaigns vs the rest of Google so the UI can highlight them.
+  const brandedSpend = adSpend
+    .filter((r) => isBrandedCampaign(r.campaign_id))
+    .reduce((a, r) => a + r.spend_usd, 0);
+  const brandedConvValue = state.conversions
+    .filter((c) => calibration.brandedConvIds.has(c.id))
+    .reduce((a, c) => a + c.value_usd, 0);
+  const brandedConvCount = calibration.brandedConvIds.size;
+  const googleSpend = adSpend
+    .filter((r) => r.channel === 'google')
+    .reduce((a, r) => a + r.spend_usd, 0);
+  const googleConvCount = state.conversions.filter((c) => c.attribution_channel === 'google').length;
+  const googleConvValue = state.conversions
+    .filter((c) => c.attribution_channel === 'google')
+    .reduce((a, c) => a + c.value_usd, 0);
+  const brandedBreakdown = {
+    branded: {
+      spend_usd: Math.round(brandedSpend * 100) / 100,
+      conversions: brandedConvCount,
+      conversion_value_usd: Math.round(brandedConvValue * 100) / 100,
+      roas: brandedSpend > 0 ? brandedConvValue / brandedSpend : 0,
+      share_of_google_spend: googleSpend > 0 ? brandedSpend / googleSpend : 0,
+      share_of_google_value: googleConvValue > 0 ? brandedConvValue / googleConvValue : 0,
+    },
+    non_branded: {
+      spend_usd: Math.round((googleSpend - brandedSpend) * 100) / 100,
+      conversions: googleConvCount - brandedConvCount,
+      conversion_value_usd: Math.round((googleConvValue - brandedConvValue) * 100) / 100,
+      roas:
+        googleSpend - brandedSpend > 0
+          ? (googleConvValue - brandedConvValue) / (googleSpend - brandedSpend)
+          : 0,
+    },
+  };
+
   const summary = {
     generated_at: bundle.generated_at,
     date_range: bundle.date_range,
@@ -1360,9 +1809,11 @@ function main() {
     time_to_conversion_by_channel: bundle.time_to_conversion_by_channel,
     word_resonance: bundle.word_resonance,
     intent_theme_frequency: bundle.intent_theme_frequency,
+    branded_search_breakdown: brandedBreakdown,
   };
 
   writeFileSync(path.join(outDir, 'summary.json'), JSON.stringify(summary));
+  writeFileSync(path.join(outDir, 'brand-growth.json'), JSON.stringify(brandGrowth));
   writeFileSync(path.join(outDir, 'customers.json'), JSON.stringify(bundle.customers));
   writeFileSync(path.join(outDir, 'creatives.json'), JSON.stringify(bundle.creatives));
   writeFileSync(path.join(outDir, 'offerings.json'), JSON.stringify(bundle.offerings));
@@ -1416,6 +1867,14 @@ function main() {
   log(`  conversions=${state.conversions.length}`);
   log(`  ad_spend rows=${adSpend.length}`);
   log(`  total spend=$${Math.round(adSpend.reduce((a, r) => a + r.spend_usd, 0)).toLocaleString()}`);
+  log(`  blended ROAS=${kpiSummary.blended_roas.toFixed(2)}x`);
+  for (const m of channelMetrics) {
+    if (m.spend_usd > 0) {
+      log(`  ${m.channel.padEnd(10)} ROAS=${m.roas.toFixed(2)}x  spend=$${Math.round(m.spend_usd).toLocaleString()}  conv=${m.conversions}  value=$${Math.round(m.conversion_value_usd).toLocaleString()}`);
+    }
+  }
+  log(`  branded ROAS=${brandedBreakdown.branded.roas.toFixed(2)}x  (${(brandedBreakdown.branded.share_of_google_spend * 100).toFixed(1)}% of Google spend)`);
+  log(`  non-branded ROAS=${brandedBreakdown.non_branded.roas.toFixed(2)}x`);
 }
 
 main();

@@ -12,12 +12,14 @@ import {
   Megaphone,
   Sparkles,
   BookOpen,
+  TrendingUp,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { cn } from '@/lib/utils';
 
 const NAV = [
   { href: '/', label: 'Overview', icon: LayoutDashboard },
+  { href: '/growth', label: 'Brand growth', icon: TrendingUp },
   { href: '/channels', label: 'Channels', icon: Radio },
   { href: '/journey', label: 'Journey', icon: GitBranch },
   { href: '/funnel', label: 'Funnel', icon: ListFilter },

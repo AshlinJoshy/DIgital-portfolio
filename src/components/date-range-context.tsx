@@ -4,17 +4,17 @@ import * as React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CalendarDays } from 'lucide-react';
 
-export type RangeKey = '7d' | '30d' | '90d' | '180d' | 'all';
+export type RangeKey = '30d' | '90d' | '180d' | '365d' | '720d' | 'all';
 
 interface Ctx {
   range: RangeKey;
   setRange: (r: RangeKey) => void;
 }
 
-const DateRangeCtx = React.createContext<Ctx>({ range: '180d', setRange: () => {} });
+const DateRangeCtx = React.createContext<Ctx>({ range: 'all', setRange: () => {} });
 
 export function DateRangeProvider({ children }: { children: React.ReactNode }) {
-  const [range, setRange] = React.useState<RangeKey>('180d');
+  const [range, setRange] = React.useState<RangeKey>('all');
   return <DateRangeCtx.Provider value={{ range, setRange }}>{children}</DateRangeCtx.Provider>;
 }
 
@@ -23,11 +23,12 @@ export function useDateRange() {
 }
 
 const LABELS: Record<RangeKey, string> = {
-  '7d': 'Last 7 days',
   '30d': 'Last 30 days',
   '90d': 'Last 90 days',
-  '180d': 'Last 180 days',
-  all: 'All time',
+  '180d': 'Last 6 months',
+  '365d': 'Last 12 months',
+  '720d': 'Last 24 months',
+  all: 'All time (2y)',
 };
 
 export function DateRangePicker() {
@@ -53,7 +54,15 @@ export function DateRangePicker() {
 
 export function filterByRange<T extends { date?: string }>(rows: T[], range: RangeKey, endDate: string): T[] {
   if (range === 'all') return rows;
-  const days = range === '7d' ? 7 : range === '30d' ? 30 : range === '90d' ? 90 : 180;
+  const daysMap: Record<RangeKey, number> = {
+    '30d': 30,
+    '90d': 90,
+    '180d': 180,
+    '365d': 365,
+    '720d': 720,
+    all: 9999,
+  };
+  const days = daysMap[range];
   const end = new Date(endDate);
   const start = new Date(end.getTime() - (days - 1) * 24 * 60 * 60 * 1000);
   return rows.filter((r) => {

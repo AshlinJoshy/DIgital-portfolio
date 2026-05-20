@@ -39,7 +39,11 @@ export default function OverviewPage() {
   }
 
   // Top-line storylines surfaced as "headline insights"
-  const headlines = computeHeadlines(summary.channel_metrics, summary.attribution_weights);
+  const headlines = computeHeadlines(
+    summary.channel_metrics,
+    summary.attribution_weights,
+    summary.branded_search_breakdown,
+  );
 
   return (
     <DateRangeProvider>
@@ -69,9 +73,15 @@ export default function OverviewPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <KpiCard
             accent
+            label="Blended ROAS"
+            value={`${kpi.blended_roas.toFixed(2)}×`}
+            hint="Conversion revenue ÷ total paid spend"
+            sublabel="2-year blended"
+          />
+          <KpiCard
             label="Ad spend"
             value={formatUSD(kpi.total_spend_usd)}
-            hint="Last 180 days · paid channels only"
+            hint="Last 24 months · paid channels only"
             sparkline={spendSparkline}
           />
           <KpiCard
@@ -81,16 +91,16 @@ export default function OverviewPage() {
             sparkline={customerSparkline}
           />
           <KpiCard
-            label="Qualified actions"
-            value={formatNumber(kpi.qualified_actions)}
-            hint="Demo/consult/cart — mid-funnel intent"
-            sparkline={qaSparkline}
-          />
-          <KpiCard
             label="Conversions"
             value={formatNumber(kpi.conversions)}
             hint={`${formatUSD(kpi.conversion_value_usd)} total transacted`}
             sparkline={conversionSparkline}
+          />
+          <KpiCard
+            label="Qualified actions"
+            value={formatNumber(kpi.qualified_actions)}
+            hint="Demo/consult/cart — mid-funnel intent"
+            sparkline={qaSparkline}
           />
           <KpiCard
             label="True cost per conversion"
@@ -101,12 +111,6 @@ export default function OverviewPage() {
             label="Pipeline value"
             value={formatUSD(kpi.pipeline_value_usd)}
             hint="Σ predicted_conversion × predicted_ltv"
-          />
-          <KpiCard
-            label="Blended ROAS"
-            value={`${kpi.blended_roas.toFixed(2)}×`}
-            hint="Conversion revenue ÷ spend"
-            sublabel="all channels"
           />
           <KpiCard
             label="Avg AOV"
@@ -192,8 +196,18 @@ interface Headline {
 function computeHeadlines(
   metrics: ReturnType<typeof getSummary>['channel_metrics'],
   attribution: ReturnType<typeof getSummary>['attribution_weights'],
+  branded: ReturnType<typeof getSummary>['branded_search_breakdown'],
 ): Headline[] {
   const out: Headline[] = [];
+
+  // Branded search highlight — operator's specialty
+  out.push({
+    title: 'Branded search',
+    body: `Google Branded campaigns return ${branded.branded.roas.toFixed(1)}× ROAS on just ${formatPercent(
+      branded.branded.share_of_google_spend,
+      1,
+    )} of Google spend — ${formatPercent(branded.branded.share_of_google_value, 0)} of the channel's revenue.`,
+  });
 
   const paid = metrics.filter((m) => m.spend_usd > 0);
   const bestCpa = [...paid].sort((a, b) => a.cpa - b.cpa)[0];

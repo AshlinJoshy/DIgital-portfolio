@@ -69,6 +69,65 @@ export default function ChannelsPage() {
         spendByChannelByDate={spendByChannelByDate}
       />
 
+      {/* Branded vs non-branded Google highlight */}
+      <Card className="border-accent/30 bg-accent/[0.04]">
+        <CardHeader>
+          <CardTitle>Google: branded vs non-branded breakdown</CardTitle>
+          <CardDescription>
+            Branded search is a small slice of Google spend but a major slice of Google
+            revenue. The non-branded campaigns are the actual acquisition engine — branded is
+            what happens when the rest of the funnel pays off.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="rounded-md border border-accent/40 bg-accent/5 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[10.5px] uppercase tracking-wider text-muted-foreground">
+                    Branded search
+                  </div>
+                  <div className="font-display text-base font-medium mt-0.5">
+                    Search · Exact / Phrase on brand name
+                  </div>
+                </div>
+                <Badge variant="success">{summary.branded_search_breakdown.branded.roas.toFixed(1)}× ROAS</Badge>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-[11px]">
+                <Stat label="Spend" value={`$${(summary.branded_search_breakdown.branded.spend_usd / 1000).toFixed(0)}K`} />
+                <Stat label="Conversions" value={String(summary.branded_search_breakdown.branded.conversions)} />
+                <Stat label="Revenue" value={`$${(summary.branded_search_breakdown.branded.conversion_value_usd / 1000).toFixed(0)}K`} />
+              </div>
+              <div className="mt-3 text-[11px] text-muted-foreground">
+                {(summary.branded_search_breakdown.branded.share_of_google_spend * 100).toFixed(1)}% of Google spend ·{' '}
+                {(summary.branded_search_breakdown.branded.share_of_google_value * 100).toFixed(1)}% of Google revenue
+              </div>
+            </div>
+            <div className="rounded-md border border-border/60 bg-card/50 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[10.5px] uppercase tracking-wider text-muted-foreground">
+                    Non-branded search
+                  </div>
+                  <div className="font-display text-base font-medium mt-0.5">
+                    Prospecting, intent keywords, conquesting
+                  </div>
+                </div>
+                <Badge variant="default">{summary.branded_search_breakdown.non_branded.roas.toFixed(2)}× ROAS</Badge>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-[11px]">
+                <Stat label="Spend" value={`$${(summary.branded_search_breakdown.non_branded.spend_usd / 1000).toFixed(0)}K`} />
+                <Stat label="Conversions" value={String(summary.branded_search_breakdown.non_branded.conversions)} />
+                <Stat label="Revenue" value={`$${(summary.branded_search_breakdown.non_branded.conversion_value_usd / 1000).toFixed(0)}K`} />
+              </div>
+              <div className="mt-3 text-[11px] text-muted-foreground">
+                Bulk of Google spend · still meaningfully above 1× ROAS while feeding the funnel
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Cost-per-conversion vs share-of-spend</CardTitle>
@@ -144,6 +203,15 @@ export default function ChannelsPage() {
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[9.5px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="mt-0.5 font-medium tabular text-foreground">{value}</div>
     </div>
   );
 }
