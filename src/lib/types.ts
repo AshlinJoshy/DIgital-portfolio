@@ -276,6 +276,19 @@ export interface DailyTimeseries {
   customers_acquired: number;
 }
 
+export interface DailyChannelMetric {
+  date: string;
+  channel: Channel;
+  spend_usd: number;
+  sessions: number;
+  qualified_actions: number;
+  conversions: number;
+  conversion_value_usd: number;
+  customers_acquired: number;
+  clicks: number;
+  impressions: number;
+}
+
 export interface BrandGrowthMonthly {
   month: string;
   month_index: number;

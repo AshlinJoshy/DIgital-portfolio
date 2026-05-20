@@ -1214,6 +1214,92 @@ function buildKpiSummary(metrics: ChannelMetrics[], conversions: Conversion[], c
   };
 }
 
+// Per-channel daily metrics — drives client-side date-range filtering on
+// the overview page so KPIs and the channel summary table update when the
+// operator changes the selected window.
+function buildDailyByChannel(
+  adSpend: AdSpendRow[],
+  sessions: Session[],
+  customers: Customer[],
+  conversions: Conversion[],
+): {
+  date: string;
+  channel: Channel;
+  spend_usd: number;
+  sessions: number;
+  qualified_actions: number;
+  conversions: number;
+  conversion_value_usd: number;
+  customers_acquired: number;
+  clicks: number;
+  impressions: number;
+}[] {
+  const key = (d: string, c: Channel) => `${d}|${c}`;
+  const map = new Map<
+    string,
+    {
+      date: string;
+      channel: Channel;
+      spend_usd: number;
+      sessions: number;
+      qualified_actions: number;
+      conversions: number;
+      conversion_value_usd: number;
+      customers_acquired: number;
+      clicks: number;
+      impressions: number;
+    }
+  >();
+  const ensure = (d: string, c: Channel) => {
+    const k = key(d, c);
+    if (!map.has(k))
+      map.set(k, {
+        date: d,
+        channel: c,
+        spend_usd: 0,
+        sessions: 0,
+        qualified_actions: 0,
+        conversions: 0,
+        conversion_value_usd: 0,
+        customers_acquired: 0,
+        clicks: 0,
+        impressions: 0,
+      });
+    return map.get(k)!;
+  };
+  for (const r of adSpend) {
+    const row = ensure(r.date, r.channel);
+    row.spend_usd += r.spend_usd;
+    row.clicks += r.clicks;
+    row.impressions += r.impressions;
+  }
+  for (const s of sessions) {
+    const d = s.started_at.slice(0, 10);
+    const row = ensure(d, s.channel);
+    row.sessions++;
+    if (s.qualified_action) row.qualified_actions++;
+  }
+  for (const c of conversions) {
+    const d = c.occurred_at.slice(0, 10);
+    const row = ensure(d, c.attribution_channel);
+    row.conversions++;
+    row.conversion_value_usd += c.value_usd;
+  }
+  for (const cust of customers) {
+    if (!cust.created_at) continue;
+    const d = cust.created_at.slice(0, 10);
+    const row = ensure(d, cust.first_touch_channel);
+    row.customers_acquired++;
+  }
+  return Array.from(map.values())
+    .map((r) => ({
+      ...r,
+      spend_usd: Math.round(r.spend_usd * 100) / 100,
+      conversion_value_usd: Math.round(r.conversion_value_usd * 100) / 100,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
 function buildFunnelByChannel(
   adSpend: AdSpendRow[],
   sessions: Session[],
@@ -1716,6 +1802,12 @@ function main() {
   log('Building channel metrics, timeseries, KPI summary...');
   const channelMetrics = buildChannelMetrics(adSpend, state.sessions, state.customers, state.conversions);
   const dailyTs = buildDailyTimeseries(adSpend, state.sessions, state.customers, state.conversions);
+  const dailyByChannel = buildDailyByChannel(
+    adSpend,
+    state.sessions,
+    state.customers,
+    state.conversions,
+  );
   const kpiSummary = buildKpiSummary(channelMetrics, state.conversions, state.customers);
   const funnelByChannel = buildFunnelByChannel(adSpend, state.sessions, state.customers, state.conversions);
   const pathLen = pathLengthDistribution(journeys);
@@ -1814,6 +1906,7 @@ function main() {
 
   writeFileSync(path.join(outDir, 'summary.json'), JSON.stringify(summary));
   writeFileSync(path.join(outDir, 'brand-growth.json'), JSON.stringify(brandGrowth));
+  writeFileSync(path.join(outDir, 'daily-by-channel.json'), JSON.stringify(dailyByChannel));
   writeFileSync(path.join(outDir, 'customers.json'), JSON.stringify(bundle.customers));
   writeFileSync(path.join(outDir, 'creatives.json'), JSON.stringify(bundle.creatives));
   writeFileSync(path.join(outDir, 'offerings.json'), JSON.stringify(bundle.offerings));

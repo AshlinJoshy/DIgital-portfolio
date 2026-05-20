@@ -23,6 +23,7 @@ import type {
   Creative,
   Customer,
   CustomerJourney,
+  DailyChannelMetric,
   DailyTimeseries,
   FunnelByChannelRow,
   IntentTag,
@@ -60,6 +61,11 @@ export const getSummary = cache((): Summary => loadJson<Summary>('summary.json')
 /** /* SQL: SELECT * FROM mart.brand_growth_monthly ORDER BY month */
 export const getBrandGrowth = cache((): BrandGrowthMonthly[] =>
   loadJson<BrandGrowthMonthly[]>('brand-growth.json'),
+);
+
+/** /* SQL: SELECT * FROM mart.daily_channel_metrics */
+export const getDailyByChannel = cache((): DailyChannelMetric[] =>
+  loadJson<DailyChannelMetric[]>('daily-by-channel.json'),
 );
 
 /** /* SQL: SELECT * FROM crm.customers ORDER BY created_at DESC */
