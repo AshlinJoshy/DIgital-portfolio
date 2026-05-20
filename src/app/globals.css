@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Light theme — warm off-white with deep navy */
+    --background: 40 30% 97%;
+    --foreground: 220 50% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 50% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 50% 12%;
+    --primary: 220 50% 12%;
+    --primary-foreground: 40 30% 97%;
+    --secondary: 220 15% 92%;
+    --secondary-foreground: 220 50% 12%;
+    --muted: 220 15% 94%;
+    --muted-foreground: 215 20% 45%;
+    --accent: 38 70% 55%;
+    --accent-foreground: 220 50% 12%;
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 15% 88%;
+    --input: 220 15% 88%;
+    --ring: 38 70% 55%;
+    --radius: 0.625rem;
+  }
+
+  .dark {
+    /* Dark theme — deep navy with warm gold accents */
+    --background: 220 50% 7%;
+    --foreground: 40 30% 95%;
+    --card: 220 45% 10%;
+    --card-foreground: 40 30% 95%;
+    --popover: 220 45% 9%;
+    --popover-foreground: 40 30% 95%;
+    --primary: 40 30% 95%;
+    --primary-foreground: 220 50% 7%;
+    --secondary: 220 40% 14%;
+    --secondary-foreground: 40 30% 95%;
+    --muted: 220 35% 13%;
+    --muted-foreground: 215 15% 65%;
+    --accent: 38 75% 60%;
+    --accent-foreground: 220 50% 7%;
+    --destructive: 0 70% 45%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 30% 18%;
+    --input: 220 30% 18%;
+    --ring: 38 75% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  /* Card with refined elevation and border treatment */
+  .surface {
+    @apply bg-card text-card-foreground rounded-lg border border-border/60 shadow-sm;
+  }
+
+  /* Subtle gradient backgrounds for hero / KPI cards */
+  .gradient-card {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--card)) 0%,
+      hsl(var(--card)) 50%,
+      hsl(var(--accent) / 0.04) 100%
+    );
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, hsl(var(--foreground)) 0%, hsl(var(--accent)) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Recharts overrides — make grid lines softer and cleaner */
+  .recharts-cartesian-grid line {
+    @apply stroke-border/40;
+  }
+  .recharts-text {
+    @apply fill-muted-foreground;
+    font-size: 11px;
+  }
+  .recharts-default-tooltip {
+    @apply !rounded-md !border-border !bg-popover !shadow-lg;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/40;
+  }
+
+  /* Reveal on mount */
+  .reveal {
+    animation: fade-in 0.5s ease-out both;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .bg-grid {
+    background-image: radial-gradient(circle, hsl(var(--border)) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+}
