@@ -41,7 +41,7 @@ export default function GrowthPage() {
             From paid testing to a brand people search by name.
           </h1>
           <p className="text-sm text-muted-foreground max-w-2xl">
-            Two years of compounded effort across Google, Meta, TikTok, LinkedIn and content —
+            Two years of compounded effort across Google Ads, Meta Ads, TikTok, LinkedIn and content —
             captured month-by-month. Watch the budget scale, the audiences grow, the Quality
             Score climb, and the share of demand shift from paid acquisition to direct & organic.
           </p>
@@ -254,7 +254,7 @@ export default function GrowthPage() {
             over 24 months and returned{' '}
             <strong className="text-foreground">{formatUSD(summary.branded_search_breakdown.branded.conversion_value_usd)}</strong> —
             that&apos;s {summary.branded_search_breakdown.branded.roas.toFixed(1)}× on every dollar.
-            It works because awareness from the rest of the funnel (TikTok creators, Meta
+            It works because awareness from the rest of the funnel (TikTok creators, Meta Ads
             video, content marketing, partner placements) drives demand that lands here as
             high-intent, brand-aware traffic.
           </p>

@@ -37,7 +37,7 @@ export default function OverviewPage() {
                 One view of every dollar, every channel, every customer.
               </h1>
               <p className="text-sm text-muted-foreground max-w-2xl">
-                Spend, performance, and outcomes across Google Ads, Meta, TikTok, LinkedIn,
+                Spend, performance, and outcomes across Google Ads, Meta Ads, TikTok, LinkedIn,
                 Snapchat, plus organic, direct, referral and email — joined to customer journeys
                 from PostHog, GA4, and the internal CRM.
               </p>

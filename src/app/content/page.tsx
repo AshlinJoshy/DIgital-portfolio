@@ -38,7 +38,7 @@ export default function ContentPage() {
           <Tabs defaultValue="all">
             <TabsList className="flex flex-wrap h-auto">
               <TabsTrigger value="all">All platforms</TabsTrigger>
-              <TabsTrigger value="meta">Meta</TabsTrigger>
+              <TabsTrigger value="meta">Meta Ads</TabsTrigger>
               <TabsTrigger value="google">Google</TabsTrigger>
               <TabsTrigger value="tiktok">TikTok</TabsTrigger>
               <TabsTrigger value="linkedin">LinkedIn</TabsTrigger>

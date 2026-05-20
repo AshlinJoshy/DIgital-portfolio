@@ -150,7 +150,7 @@ export function trainLogisticRegression(customers: Customer[]): TrainedModel {
 
   const descriptions: Record<string, string> = {
     first_touch_google: 'First-touch channel was Google Ads',
-    first_touch_meta: 'First-touch channel was Meta',
+    first_touch_meta: 'First-touch channel was Meta Ads',
     first_touch_tiktok: 'First-touch channel was TikTok',
     first_touch_linkedin: 'First-touch channel was LinkedIn',
     first_touch_snapchat: 'First-touch channel was Snapchat',

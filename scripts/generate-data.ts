@@ -505,7 +505,13 @@ function generateAdSpend(creatives: Creative[]): AdSpendRow[] {
           const creative = channelCreatives[(cmpIdx * 3 + agIdx) % channelCreatives.length];
           const cpc = clamp(gaussian(profile.cpc_mean, profile.cpc_std), 0.2, 50);
           const clicks = Math.max(1, Math.round(agSpend / cpc));
-          const ctr = clamp(gaussian(channel === 'tiktok' ? 0.018 : 0.012, 0.004), 0.003, 0.05);
+          // Google non-branded paid search has strong CTRs (~5% — operator's
+          // target) because keyword targeting matches search intent.
+          // TikTok runs higher than other paid social. Other platforms ~1.2%.
+          const ctrMean =
+            channel === 'google' ? 0.05 : channel === 'tiktok' ? 0.018 : 0.012;
+          const ctrStd = channel === 'google' ? 0.01 : 0.004;
+          const ctr = clamp(gaussian(ctrMean, ctrStd), 0.003, 0.12);
           const impressions = Math.round(clicks / ctr);
           const platConv = clicks * clamp(gaussian(profile.conversion_rate_mean * 1.4, 0.01), 0, 0.2);
           rows.push({
@@ -1191,11 +1197,19 @@ function buildDailyTimeseries(
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
-function buildKpiSummary(metrics: ChannelMetrics[], conversions: Conversion[], customers: Customer[]): KpiSummary {
+function buildKpiSummary(
+  metrics: ChannelMetrics[],
+  conversions: Conversion[],
+  customers: Customer[],
+  sessions: Session[],
+): KpiSummary {
   const total_spend_usd = metrics.reduce((a, m) => a + m.spend_usd, 0);
   const conversions_count = conversions.length;
   const conversion_value_usd = conversions.reduce((a, c) => a + c.value_usd, 0);
-  const qualified_actions = customers.filter((c) => c.qualified_action_at).length;
+  // Qualified actions = count of session-level QA events (matches funnel
+  // page + channel breakdown). Avoids the discrepancy between "unique
+  // customers who reached QA" and "QA events recorded".
+  const qualified_actions = sessions.filter((s) => s.qualified_action).length;
   const customers_acquired = customers.length;
   return {
     total_spend_usd: Math.round(total_spend_usd * 100) / 100,
@@ -1318,6 +1332,13 @@ function buildFunnelByChannel(
     }
   }
 
+  // Use real conversion events (not session.converted flag) so funnel
+  // page conversion counts reconcile with channel_metrics + KPIs.
+  const convByChannel = new Map<Channel, number>();
+  for (const c of conversions) {
+    convByChannel.set(c.attribution_channel, (convByChannel.get(c.attribution_channel) ?? 0) + 1);
+  }
+
   for (const channel of channelSet) {
     const spendRows = adSpend.filter((r) => r.channel === channel);
     const impressions = spendRows.reduce((a, r) => a + r.impressions, 0);
@@ -1325,7 +1346,7 @@ function buildFunnelByChannel(
     const sCount = channelSessions.length;
     const eCount = channelSessions.filter((s) => s.engaged).length;
     const qaCount = channelSessions.filter((s) => s.qualified_action).length;
-    const convCount = channelSessions.filter((s) => s.converted).length;
+    const convCount = convByChannel.get(channel) ?? 0;
 
     // median seconds from session start to QA
     const qaSessions = channelSessions.filter((s) => s.qualified_action);
@@ -1721,9 +1742,11 @@ function buildBrandGrowth(
   const uniqueMonths = Array.from(new Set(months));
 
   // Social / SEO progression (modeled as a sigmoid + monthly noise)
-  // Starting positions vs end positions for storytelling
-  const insta = (mi: number) => Math.round(8000 + 165000 / (1 + Math.exp(-0.28 * (mi - 12))));
-  const tt = (mi: number) => Math.round(4000 + 240000 / (1 + Math.exp(-0.34 * (mi - 13))));
+  // Calibrated to realistic per-year growth for a mid-market consumer brand:
+  //   Instagram: ~12-14K new followers per year (24K-28K across 2 years)
+  //   TikTok:    ~6-7K new followers per year (~13K across 2 years)
+  const insta = (mi: number) => Math.round(2500 + 26000 / (1 + Math.exp(-0.28 * (mi - 12))));
+  const tt = (mi: number) => Math.round(1500 + 13000 / (1 + Math.exp(-0.32 * (mi - 13))));
   const qs = (mi: number) => Math.min(9.6, 4.8 + 4.5 / (1 + Math.exp(-0.32 * (mi - 11))));
   const brandedSearch = (mi: number) =>
     Math.round(180 + 5800 / (1 + Math.exp(-0.36 * (mi - 13))));
@@ -1808,7 +1831,12 @@ function main() {
     state.customers,
     state.conversions,
   );
-  const kpiSummary = buildKpiSummary(channelMetrics, state.conversions, state.customers);
+  const kpiSummary = buildKpiSummary(
+    channelMetrics,
+    state.conversions,
+    state.customers,
+    state.sessions,
+  );
   const funnelByChannel = buildFunnelByChannel(adSpend, state.sessions, state.customers, state.conversions);
   const pathLen = pathLengthDistribution(journeys);
   const ttcByChannel = timeToConversionByChannel(journeys);

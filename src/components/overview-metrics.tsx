@@ -374,7 +374,7 @@ function computeHeadlines(
 function labelOf(c: Channel): string {
   const m: Record<Channel, string> = {
     google: 'Google Ads',
-    meta: 'Meta',
+    meta: 'Meta Ads',
     tiktok: 'TikTok',
     linkedin: 'LinkedIn',
     snapchat: 'Snapchat',

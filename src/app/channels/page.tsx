@@ -153,7 +153,7 @@ export default function ChannelsPage() {
             <TabsList className="flex flex-wrap h-auto">
               <TabsTrigger value="all">All</TabsTrigger>
               <TabsTrigger value="google">Google</TabsTrigger>
-              <TabsTrigger value="meta">Meta</TabsTrigger>
+              <TabsTrigger value="meta">Meta Ads</TabsTrigger>
               <TabsTrigger value="tiktok">TikTok</TabsTrigger>
               <TabsTrigger value="linkedin">LinkedIn</TabsTrigger>
               <TabsTrigger value="snapchat">Snapchat</TabsTrigger>
@@ -171,7 +171,7 @@ export default function ChannelsPage() {
       <div className="grid lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Top Meta creatives by attributed conversions</CardTitle>
+            <CardTitle>Top Meta Ads creatives by attributed conversions</CardTitle>
             <CardDescription>Platform-attributed conversions, ranked by volume.</CardDescription>
           </CardHeader>
           <CardContent>
