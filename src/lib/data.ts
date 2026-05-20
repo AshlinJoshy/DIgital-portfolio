@@ -16,11 +16,14 @@ import type {
   AdSpendRow,
   AnalyticsEvent,
   AttributionWeights,
+  BrandGrowthMonthly,
+  BrandedSearchBreakdown,
   ChannelMetrics,
   Conversion,
   Creative,
   Customer,
   CustomerJourney,
+  DailyChannelMetric,
   DailyTimeseries,
   FunnelByChannelRow,
   IntentTag,
@@ -49,10 +52,21 @@ interface Summary {
   time_to_conversion_by_channel: { channel: string; median_days: number; mean_days: number }[];
   word_resonance: { phrase: string; lift: number; conversion_count: number }[];
   intent_theme_frequency: { tag: IntentTag; count: number }[];
+  branded_search_breakdown: BrandedSearchBreakdown;
 }
 
 /** /* SQL: SELECT * FROM mart.dashboard_summary */
 export const getSummary = cache((): Summary => loadJson<Summary>('summary.json'));
+
+/** /* SQL: SELECT * FROM mart.brand_growth_monthly ORDER BY month */
+export const getBrandGrowth = cache((): BrandGrowthMonthly[] =>
+  loadJson<BrandGrowthMonthly[]>('brand-growth.json'),
+);
+
+/** /* SQL: SELECT * FROM mart.daily_channel_metrics */
+export const getDailyByChannel = cache((): DailyChannelMetric[] =>
+  loadJson<DailyChannelMetric[]>('daily-by-channel.json'),
+);
 
 /** /* SQL: SELECT * FROM crm.customers ORDER BY created_at DESC */
 export const getCustomers = cache((): Customer[] => loadJson<Customer[]>('customers.json'));

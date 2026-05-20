@@ -27,7 +27,7 @@ const jetbrains = JetBrains_Mono({
 export const metadata: Metadata = {
   title: 'Convergence · Marketing Intelligence',
   description:
-    'A unified marketing intelligence dashboard for multi-channel consumer brands — Google, Meta, TikTok, LinkedIn, PostHog, GA4, CRM. Markov attribution, customer scoring, and journey analytics.',
+    'A unified marketing intelligence dashboard for multi-channel consumer brands — Google Ads, Meta Ads, TikTok, LinkedIn, PostHog, GA4, CRM. Markov attribution, customer scoring, and journey analytics.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -47,7 +47,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   marketing intelligence dashboard
                 </div>
                 <div className="tabular">
-                  Data is simulated. In production this stack would ingest from Google Ads, Meta,
+                  Data is simulated. In production this stack would ingest from Google Ads, Meta Ads,
                   TikTok, LinkedIn, Snapchat, PostHog, GA4, and a CRM warehouse.
                 </div>
               </div>

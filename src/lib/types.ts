@@ -276,6 +276,51 @@ export interface DailyTimeseries {
   customers_acquired: number;
 }
 
+export interface DailyChannelMetric {
+  date: string;
+  channel: Channel;
+  spend_usd: number;
+  sessions: number;
+  qualified_actions: number;
+  conversions: number;
+  conversion_value_usd: number;
+  customers_acquired: number;
+  clicks: number;
+  impressions: number;
+}
+
+export interface BrandGrowthMonthly {
+  month: string;
+  month_index: number;
+  paid_spend_usd: number;
+  customers_acquired: number;
+  conversions: number;
+  blended_roas: number;
+  instagram_followers: number;
+  tiktok_followers: number;
+  google_quality_score: number;
+  branded_search_volume: number;
+  organic_share_of_sessions: number;
+  milestone?: string;
+}
+
+export interface BrandedSearchBreakdown {
+  branded: {
+    spend_usd: number;
+    conversions: number;
+    conversion_value_usd: number;
+    roas: number;
+    share_of_google_spend: number;
+    share_of_google_value: number;
+  };
+  non_branded: {
+    spend_usd: number;
+    conversions: number;
+    conversion_value_usd: number;
+    roas: number;
+  };
+}
+
 export interface FunnelByChannelRow {
   channel: Channel;
   impressions: number;
